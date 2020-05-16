@@ -26,3 +26,12 @@ output:
 ./go.mod:6:1: github.com/gostaticanalysis/modfile must use released version
 ./go.mod:8:1: golang.org/x/tools must use released version
 ```
+
+When you execute this linter by `go vet` and if your project has a structure
+that the project root directory has go.mod file but does not have any Go files,
+then you should use `-root` flag to specify the root directory path.
+Otherwise the linter cannot find go.mod file.
+
+```
+go vet -vettool=`which releasedver` -paths=golang.org/x/tools,github.com/gostaticanalysis/modfile -root=. ./...
+```
