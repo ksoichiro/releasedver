@@ -9,7 +9,7 @@ import (
 
 func TestAnalyzer(t *testing.T) {
 	testdata := analysistest.TestData()
-	analysistest.Run(t, testdata, Analyzer, "a")
+	analysistest.Run(t, testdata, NewAnalyzer(), "a")
 }
 
 func TestAnalyzerWithPaths(t *testing.T) {
@@ -18,7 +18,7 @@ func TestAnalyzerWithPaths(t *testing.T) {
 	flags := flag.NewFlagSet("", flag.ExitOnError)
 	flags.String("paths", "golang.org/x/tools", "")
 	flags.String("root", "", "")
-	analyzer := Analyzer
+	analyzer := NewAnalyzer()
 	analyzer.Flags = *flags
 
 	analysistest.Run(t, testdata, analyzer, "b")
@@ -30,7 +30,7 @@ func TestAnalyzerWithMultiplePaths(t *testing.T) {
 	flags := flag.NewFlagSet("", flag.ExitOnError)
 	flags.String("paths", "golang.org/x/tools,github.com/gostaticanalysis/modfile", "")
 	flags.String("root", "", "")
-	analyzer := Analyzer
+	analyzer := NewAnalyzer()
 	analyzer.Flags = *flags
 
 	results := analysistest.Run(t, testdata, analyzer, "c")
@@ -50,7 +50,7 @@ func TestAnalyzerWithNoGoFilesInGoModDirectory(t *testing.T) {
 	flags := flag.NewFlagSet("", flag.ExitOnError)
 	flags.String("paths", "golang.org/x/tools", "")
 	flags.String("root", "", "")
-	analyzer := Analyzer
+	analyzer := NewAnalyzer()
 	analyzer.Flags = *flags
 
 	results := analysistest.Run(t, testdata, analyzer, "d/...")
@@ -60,7 +60,7 @@ func TestAnalyzerWithNoGoFilesInGoModDirectory(t *testing.T) {
 	}
 	expectedErrors := 1
 	if errors != expectedErrors {
-		t.Errorf("got %q, want %q", errors, expectedErrors)
+		t.Errorf("got %d, want %d", errors, expectedErrors)
 	}
 }
 

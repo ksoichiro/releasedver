@@ -9,20 +9,23 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/gostaticanalysis/modfile"
 	xmodfile "golang.org/x/mod/modfile"
 	"golang.org/x/tools/go/analysis"
 )
 
-var Analyzer = &analysis.Analyzer{
-	Name:  "releasedver",
-	Doc:   Doc,
-	Run:   run,
-	Flags: flags(),
-	Requires: []*analysis.Analyzer{
-		modfile.Analyzer,
-	},
+func NewAnalyzer() *analysis.Analyzer {
+	return &analysis.Analyzer{
+		Name:  "releasedver",
+		Doc:   Doc,
+		Run:   newRun(),
+		Flags: flags(),
+		Requires: []*analysis.Analyzer{
+			modfile.Analyzer,
+		},
+	}
 }
 
 const Doc = "releasedver forces to use go modules with released version in go.mod file"
@@ -36,7 +39,20 @@ func flags() flag.FlagSet {
 	return *flags
 }
 
-func run(pass *analysis.Pass) (interface{}, error) {
+type runner struct {
+	mu            sync.Mutex
+	rootFinderRun bool
+}
+
+func newRun() func(pass *analysis.Pass) (interface{}, error) {
+	return (&runner{}).run
+}
+
+func (r *runner) run(pass *analysis.Pass) (interface{}, error) {
+	return r.runRecursively(pass, false)
+}
+
+func (r *runner) runRecursively(pass *analysis.Pass, recursive bool) (interface{}, error) {
 	paths := strings.Split(pass.Analyzer.Flags.Lookup("paths").Value.String(), ",")
 	if len(paths) == 0 {
 		return nil, nil
@@ -44,6 +60,16 @@ func run(pass *analysis.Pass) (interface{}, error) {
 
 	mf := pass.ResultOf[modfile.Analyzer].(*xmodfile.File)
 	if mf == nil {
+		if !recursive {
+			r.mu.Lock()
+			defer func() {
+				r.rootFinderRun = true
+				r.mu.Unlock()
+			}()
+			if r.rootFinderRun {
+				return nil, nil
+			}
+		}
 		// When modfile is not found, check the parent path to find go.mod.
 		var dir string
 		root := pass.Analyzer.Flags.Lookup("root").Value.String()
@@ -61,14 +87,16 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		dir = strings.ReplaceAll(dir, "\\", "/")
 		if !strings.Contains(dir, pass.Pkg.Path()) {
 			p := types.NewPackage(parent(pass.Pkg.Path()), "a")
-			parentPass := pass
-			parentPass.Pkg = p
-
+			currentPkg := pass.Pkg
+			pass.Pkg = p
 			result := map[*analysis.Analyzer]interface{}{}
-			r, _ := modfile.Analyzer.Run(parentPass)
-			result[modfile.Analyzer] = r
-			parentPass.ResultOf = result
-			run(parentPass)
+			res, _ := modfile.Analyzer.Run(pass)
+			result[modfile.Analyzer] = res
+			currentResultOf := pass.ResultOf
+			pass.ResultOf = result
+			_, _ = r.runRecursively(pass, true)
+			pass.Pkg = currentPkg
+			pass.ResultOf = currentResultOf
 		}
 		return nil, nil
 	}

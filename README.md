@@ -35,3 +35,10 @@ Otherwise the linter cannot find go.mod file.
 ```
 go vet -vettool=`which releasedver` -paths=golang.org/x/tools,github.com/gostaticanalysis/modfile -root=. ./...
 ```
+
+Currently, the linter reports duplicate issues when executed by `go vet`,
+so if your project has this structure it's better to use the binary directly.
+
+```
+releasedver -paths=golang.org/x/tools,github.com/gostaticanalysis/modfile ./...
+```
