@@ -40,7 +40,7 @@ func TestAnalyzerWithMultiplePaths(t *testing.T) {
 	}
 	expectedErrors := 2
 	if errors != expectedErrors {
-		t.Errorf("got %q, want %q", errors, expectedErrors)
+		t.Errorf("got %d, want %d", errors, expectedErrors)
 	}
 }
 

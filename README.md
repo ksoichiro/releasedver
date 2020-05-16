@@ -27,6 +27,14 @@ output:
 ./go.mod:8:1: golang.org/x/tools must use released version
 ```
 
+## Limitations
+
+## Go 1.12 support
+
+For Go 1.12, you must set `GO111MODULE=on` to make the linter to work.
+
+## go vet
+
 When you execute this linter by `go vet` and if your project has a structure
 that the project root directory has go.mod file but does not have any Go files,
 then you should use `-root` flag to specify the root directory path.
