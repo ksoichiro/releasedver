@@ -1,5 +1,7 @@
 # releasedver
 
+[![Build Status](https://travis-ci.org/ksoichiro/releasedver.svg?branch=master)](https://travis-ci.org/ksoichiro/releasedver)
+
 `releasedver` forces to use go modules with released version in go.mod file.
 
 - OK: `example.com/foo v0.1.0`
