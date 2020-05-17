@@ -6,13 +6,14 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 
-	"github.com/gostaticanalysis/modfile"
-	xmodfile "golang.org/x/mod/modfile"
+	"golang.org/x/mod/modfile"
 	"golang.org/x/tools/go/analysis"
 )
 
@@ -22,9 +23,6 @@ func NewAnalyzer() *analysis.Analyzer {
 		Doc:   Doc,
 		Run:   newRun(),
 		Flags: flags(),
-		Requires: []*analysis.Analyzer{
-			modfile.Analyzer,
-		},
 	}
 }
 
@@ -49,16 +47,17 @@ func newRun() func(pass *analysis.Pass) (interface{}, error) {
 }
 
 func (r *runner) run(pass *analysis.Pass) (interface{}, error) {
-	return r.runRecursively(pass, false)
+	return r.runRecursively(pass, false, "")
 }
 
-func (r *runner) runRecursively(pass *analysis.Pass, recursive bool) (interface{}, error) {
+func (r *runner) runRecursively(pass *analysis.Pass, recursive bool, basePath string) (interface{}, error) {
 	paths := strings.Split(pass.Analyzer.Flags.Lookup("paths").Value.String(), ",")
 	if len(paths) == 0 {
 		return nil, nil
 	}
 
-	mf := pass.ResultOf[modfile.Analyzer].(*xmodfile.File)
+	mf, currentPath, _ := findModfile(pass, basePath)
+
 	if mf == nil {
 		if !recursive {
 			r.mu.Lock()
@@ -89,14 +88,8 @@ func (r *runner) runRecursively(pass *analysis.Pass, recursive bool) (interface{
 			p := types.NewPackage(parent(pass.Pkg.Path()), "a")
 			currentPkg := pass.Pkg
 			pass.Pkg = p
-			result := map[*analysis.Analyzer]interface{}{}
-			res, _ := modfile.Analyzer.Run(pass)
-			result[modfile.Analyzer] = res
-			currentResultOf := pass.ResultOf
-			pass.ResultOf = result
-			_, _ = r.runRecursively(pass, true)
+			_, _ = r.runRecursively(pass, true, parent(currentPath))
 			pass.Pkg = currentPkg
-			pass.ResultOf = currentResultOf
 		}
 		return nil, nil
 	}
@@ -158,4 +151,42 @@ func parent(path string) string {
 		return ""
 	}
 	return path[:idx]
+}
+
+func findModfile(pass *analysis.Pass, basePath string) (result *modfile.File, currentPath string, err error) {
+	var dir string
+	currentPath = basePath
+	if basePath != "" { // basePath is given when traversing parent path
+		dir = basePath
+	} else {
+		pass.Fset.Iterate(func(f *token.File) bool {
+			fname := f.Name()
+			if filepath.Ext(fname) == ".go" &&
+				!strings.HasSuffix(fname, "_test.go") {
+				dir = filepath.Dir(fname)
+				currentPath = dir
+				return false
+			}
+			return true
+		})
+	}
+
+	// Use of go list will cause too many open files error when there are many packages
+	modfilename := filepath.Join(dir, "go.mod")
+
+	if _, err = os.Stat(modfilename); err != nil {
+		return
+	}
+
+	data, err := ioutil.ReadFile(modfilename)
+	if err != nil {
+		return
+	}
+
+	f, err := modfile.Parse(modfilename, data, nil)
+	if err != nil {
+		return
+	}
+
+	return f, currentPath, nil
 }
